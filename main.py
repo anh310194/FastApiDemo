@@ -1,50 +1,28 @@
 import uvicorn
-from fastapi import FastAPI, Body, status, HTTPException
-from Database import db
-from fastapi.responses import JSONResponse, Response
-from Models.inventory import Inventory
-from fastapi.encoders import jsonable_encoder
-from Schema.inventory_schema import inventories_serializer, inventory_serializer
-from bson import ObjectId
+from fastapi import FastAPI
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.staticfiles import StaticFiles
 
-app = FastAPI()
+from FastApiDemo.routes.customer_route import customer_api_router
+from FastApiDemo.routes.inventory_route import inventory_api_router
+from FastApiDemo.routes.reset_route import reset_api_router
 
+app = FastAPI(docs_url=None)
+app.mount("/assets", StaticFiles(directory="assets"), name="static")
 
-@app.get("/")
-def root():
-    a = "a"
-    b = "b" + a
-    return {"hello world": b}
-
-
-@app.get("/inventory/")
-async def list_inventories():
-    result = await db.inventories.find().to_list(1000)
-    inventories = inventories_serializer(result)
-    return JSONResponse(status_code=status.HTTP_201_CREATED, content=inventories)
+# add router
+app.include_router(inventory_api_router)
+app.include_router(customer_api_router)
+app.include_router(reset_api_router)
 
 
-@app.post("/inventory/")
-async def add_new_inventory(model: Inventory):
-    inventory = jsonable_encoder(model)
-    new_inventory = await db.inventories.insert_one(inventory)
-    created_inventory = await db.inventories.find_one({"_id": new_inventory.inserted_id})
-    return JSONResponse(status_code=status.HTTP_201_CREATED, content=inventory_serializer(created_inventory))
-
-
-@app.get("/inventory/{id}")
-async def get_inventory(id: str):    
-    inventory = await db.inventories.find_one({"_id": ObjectId(id)})
-    return JSONResponse(status_code=status.HTTP_201_CREATED, content=inventory_serializer(inventory))
-
-
-@app.delete("/inventory/{id}")
-async def delete_inventory(id: str):
-    result = await db.inventories.delete_one({"_id": ObjectId(id)})
-    
-    if result.deleted_count == 1:
-            return Response(status_code=status.HTTP_204_NO_CONTENT)
-    raise HTTPException(status_code=404, detail=f"Student {id} not found")
+@app.get("/docs", include_in_schema=False)
+async def swagger_ui_html():
+    return get_swagger_ui_html(
+        openapi_url="/openapi.json",
+        title='Gigarion Swagger',
+        swagger_favicon_url="/assets/logo/icon.jpg"
+    )
 
 if __name__ == "__main__":
     uvicorn.run(app)
